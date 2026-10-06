@@ -2,6 +2,16 @@
 
 一个用 React、TypeScript 和 Electron 编写的 NovelAI 图像生成工作台。当前源码版本为 **0.2.11**，主要支持 Windows 桌面端，也可在浏览器中开发和预览。
 
+## 下载与安装（Windows 64 位）
+
+**[下载最新版 Windows 安装包](https://github.com/gothamkismet-cyber/nai-image-studio/releases/latest)**
+
+在下载页的 **Assets（下载文件）** 中选择 `NAI生图台-Setup-0.2.11.exe`，下载后双击安装即可，不需要安装 Node.js 或自行编译。首次启动可先用演示模式体验；真实生图需要自己的 NovelAI API Token。
+
+如需使用软件内的“本地覆盖更新”，请将同名的 `.exe.sha256` 校验文件也下载到安装包旁边。该文件用于核对安装包是否完整。
+
+本版本安装包采用 MIT 许可，包含许可文本。发布包不含作者的 Token、个人收藏、生成历史或本地提示词库；可在软件里连接自己的词库。
+
 ## 功能
 
 - 编辑主提示词、负面提示词和角色提示词，调整模型、尺寸、步数、采样器及 Seed（随机种子）。

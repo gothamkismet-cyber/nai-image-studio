@@ -35,7 +35,8 @@
     },
     "files": [
       "dist/**",
-      "electron/**"
+      "electron/**",
+      "LICENSE"
     ],
     "win": {
       "target": [
