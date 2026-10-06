@@ -4,11 +4,11 @@
 
 ## 下载与安装（Windows 64 位）
 
-**[下载最新版 Windows 安装包](https://github.com/gothamkismet-cyber/nai-image-studio/releases/latest)**
+**[下载安装包（.exe）](https://github.com/gothamkismet-cyber/nai-image-studio/releases/download/v0.2.11/NAI-Image-Studio-Setup-0.2.11.exe)** · [查看最新版下载页](https://github.com/gothamkismet-cyber/nai-image-studio/releases/latest)
 
-在下载页的 **Assets（下载文件）** 中选择 `NAI生图台-Setup-0.2.11.exe`，下载后双击安装即可，不需要安装 Node.js 或自行编译。首次启动可先用演示模式体验；真实生图需要自己的 NovelAI API Token。
+选择 `NAI-Image-Studio-Setup-0.2.11.exe`，下载后双击安装即可，不需要安装 Node.js 或自行编译。首次启动可先用演示模式体验；真实生图需要自己的 NovelAI API Token。下载页也提供同名的 `.exe.sha256` 文件供核对完整性。
 
-如需使用软件内的“本地覆盖更新”，请将同名的 `.exe.sha256` 校验文件也下载到安装包旁边。该文件用于核对安装包是否完整。
+如需使用已有软件里的“本地覆盖更新”，下载 [本地更新包（ZIP）](https://github.com/gothamkismet-cyber/nai-image-studio/releases/download/v0.2.11/NAI-Image-Studio-0.2.11-local-update.zip)，解压后选择其中的 `NAI生图台-Setup-0.2.11.exe`。解压后的安装包和 `.exe.sha256` 保留更新器所需的原文件名，请放在一起使用。
 
 本版本安装包采用 MIT 许可，包含许可文本。发布包不含作者的 Token、个人收藏、生成历史或本地提示词库；可在软件里连接自己的词库。
 
