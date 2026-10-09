@@ -15,7 +15,8 @@ const ready = new Promise(resolve => app.once('browser-window-created', (_e, win
 require(process.env.NAI_VERIFY_ASAR ? path.join(path.resolve(process.env.NAI_VERIFY_ASAR), 'electron/main.cjs') : '../electron/main.cjs');
 function loadTs(file, names, context = {}) {
   const mod = { exports: {} };
-  const source = stripTypeScriptTypes(fs.readFileSync(file, 'utf8'), { mode: 'transform' }).replace('import JSZip from "jszip";', 'const JSZip = require("jszip");').replace(/^export /gm, '');
+  const types = file.endsWith('nai.ts') ? stripTypeScriptTypes(fs.readFileSync('src/types.ts', 'utf8'), { mode: 'transform' }).replace(/^export /gm, '') + '\n' : '';
+  const source = types + stripTypeScriptTypes(fs.readFileSync(file, 'utf8'), { mode: 'transform' }).replace('import JSZip from "jszip";', 'const JSZip = require("jszip");').replace(/^import .*;$/gm, '').replace(/^export /gm, '');
   vm.runInNewContext(source + '\nmodule.exports = {' + names + '};', { module: mod, setTimeout, clearTimeout, ...context });
   return mod.exports;
 }

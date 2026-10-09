@@ -50,12 +50,27 @@ export interface GenParams {
   /** null = 点生成时随机 */
   seed: number | null;
   qualityToggle: boolean;
+  /** V5 的质量标签强度；旧记录沿用 standard。 */
+  qualityPreset?: "standard" | "light";
+  transparentBackground?: boolean;
+  autoText?: boolean;
   /** V4/V4.5/V5 人物提示词 */
   characters: CharPrompt[];
 }
 
-/** v4 系模型的人物提示词上限（官方 UI 上限，未实测验证） */
-export const MAX_CHARACTERS = 6;
+/** 2026-10-09 官方生产界面：V5 32 个输入栏，V4 系 6 个。 */
+export const MAX_CHARACTERS = 32;
+export function isV5Model(model: string): boolean { return model.startsWith("nai-diffusion-5"); }
+export function isMediumModel(model: string): boolean { return model === "nai-diffusion-5-full-medium"; }
+export function characterLimit(model: string): number { return isV5Model(model) ? 32 : isV4Model(model) ? 6 : 0; }
+
+/** 限制只应用于本次请求，切换模式不覆盖原来的编辑内容。 */
+export function effectiveGenerationParams(p: GenParams): GenParams {
+  if (!isMediumModel(p.model)) return isV5Model(p.model) ? { ...p, noiseSchedule: "karras" } : p;
+  return { ...p, steps: 14, sampler: "k_euler_ancestral", noiseSchedule: "karras", cfgRescale: 0,
+    negativePrompt: "", negativePromptChips: [],
+    characters: p.characters.map(c => ({ ...c, negative: "", negativeChips: [] })) };
+}
 
 /** v4/v5 系模型都支持人物提示词（char_captions） */
 export function isV4Model(model: string): boolean {
@@ -114,6 +129,7 @@ export interface HistoryItem {
 
 export const MODELS = [
   { id: "nai-diffusion-5-full", label: "NAI Diffusion v5 全量版" },
+  { id: "nai-diffusion-5-full-medium", label: "NAI Diffusion v5 全量版 · Medium" },
   { id: "nai-diffusion-5-curated", label: "NAI Diffusion v5 精选版" },
   { id: "nai-diffusion-4-5-full", label: "NAI Diffusion v4.5 全量版" },
   { id: "nai-diffusion-4-5-curated", label: "NAI Diffusion v4.5 精选版" },
@@ -152,6 +168,9 @@ export const DEFAULT_PARAMS: GenParams = {
   noiseSchedule: "karras",
   seed: null,
   qualityToggle: true,
+  qualityPreset: "standard",
+  transparentBackground: false,
+  autoText: true,
   characters: [],
 };
 
@@ -181,6 +200,9 @@ export function normalizeParams(raw: unknown): GenParams {
     sampler: choice(p.sampler, SAMPLERS, DEFAULT_PARAMS.sampler),
     noiseSchedule: choice(p.noiseSchedule, NOISE_SCHEDULES, DEFAULT_PARAMS.noiseSchedule),
     qualityToggle: typeof p.qualityToggle === "boolean" ? p.qualityToggle : DEFAULT_PARAMS.qualityToggle,
+    qualityPreset: p.qualityPreset === "light" ? "light" : "standard",
+    transparentBackground: p.transparentBackground === true,
+    autoText: p.autoText !== false,
     characters: normalizeCharacters(p.characters),
   };
 }

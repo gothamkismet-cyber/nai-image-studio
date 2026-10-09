@@ -1,7 +1,7 @@
 {
   "name": "nai-image-studio",
   "private": true,
-  "version": "0.2.11",
+  "version": "0.2.12",
   "type": "module",
   "description": "NovelAI 图像生成工作台（桌面端）",
   "license": "MIT",
@@ -58,12 +58,12 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "NAI生图台",
-      "uninstallDisplayName": "NAI生图台 0.2.11",
+      "uninstallDisplayName": "NAI生图台 0.2.12",
       "deleteAppDataOnUninstall": false,
-      "artifactName": "NAI生图台-Setup-${version}.${ext}"
+      "artifactName": "NAI-Image-Studio-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "NAI生图台-便携版-${version}.${ext}"
+      "artifactName": "NAI-Image-Studio-Portable-${version}.${ext}"
     }
   },
   "dependencies": {

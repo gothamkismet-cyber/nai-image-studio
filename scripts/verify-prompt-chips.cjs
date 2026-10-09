@@ -53,7 +53,7 @@ function unitChecks() {
     assert.equal(appended.promptChips.length,2); assert.equal(appended.promptChips[0].name,'带标点');
     assert.equal(m.removePromptChip(appended.prompt,appended.promptChips,appended.promptChips[0].id).value,'original text, next');
   }
-  const payload = m.buildPayload(trio); assert.equal(payload.input, trio.prompt); assert.ok(!JSON.stringify(payload).includes('同名')); assert.ok(!JSON.stringify(payload).includes('Chips'));
+  const payload = m.buildPayload(trio); assert.equal(payload.input, trio.prompt + ', very aesthetic, masterpiece, no text'); assert.ok(!JSON.stringify(payload).includes('同名')); assert.ok(!JSON.stringify(payload).includes('Chips'));
   // Unicode、换行、权重与标点在多次添加、逐个删除后仍保持各自快照。
   for (const text of ['😀, 日本語, 中文', '1.3::artist:sample::, [rain]', 'Text: "hello, world"\nnight', '<img src=x onerror=alert(1)>', ', trailing, ']) {
     let sample = m.insertPrompt(m.normalizeParams({ prompt: '' }), { kind: 'main' }, text, 'replace', '名称');
@@ -111,6 +111,9 @@ function unitChecks() {
     check('nativeIMEStillAvailable', await run(`!chipTest.field('提示词（想画什么）').closest('.prompt-textarea').classList.contains('is-highlighted')`));
     await act(`chipTest.field('提示词（想画什么）').dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:''}))`);
     const beforeTyping = await run('chipTest.params().prompt');
+    // 先等上一轮删除标签的延后聚焦结束，再明确把原生输入送到末尾编辑框。
+    await sleep(80);
+    await act(`const input=chipTest.field('提示词（想画什么）');input.focus();input.setSelectionRange(input.value.length,input.value.length)`);
     win.webContents.sendInputEvent({ type: 'char', keyCode: 'X' }); await sleep(100);
     assert.equal(await run('chipTest.params().prompt'), beforeTyping + 'X');
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers: ['control'] }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers: ['control'] }); await sleep(100);
@@ -137,7 +140,7 @@ function unitChecks() {
     check('fourTargetsHaveChips', four.promptChips.length === 1 && four.negativePromptChips.length === 1 && four.characters[0].captionChips.length === 1 && four.characters[0].negativeChips.length === 1);
     const generate = async () => { const n = await run('chipTest.requests.length'); await act(`chipTest.button('生成').click()`); await wait(`chipTest.requests.length===${n + 1}&&!!chipTest.button('生成')&&document.querySelectorAll('img[alt="历史图片"]').length===${n + 1}`, 'mock generation saved'); };
     await generate(); const req = await run('chipTest.requests[0]');
-    assert.equal(req.input, four.prompt); assert.equal(req.parameters.negative_prompt, four.negativePrompt); assert.equal(req.parameters.characterPrompts[0].prompt, four.characters[0].caption); assert.equal(req.parameters.characterPrompts[0].uc, four.characters[0].negative);
+    assert.equal(req.input, four.prompt + ', very aesthetic, masterpiece, no text'); assert.equal(req.parameters.negative_prompt, four.negativePrompt); assert.equal(req.parameters.characterPrompts[0].prompt, four.characters[0].caption); assert.equal(req.parameters.characterPrompts[0].uc, four.characters[0].negative);
     check('requestHasFullTextNotNames', !JSON.stringify(req).includes('Chips') && !JSON.stringify(req).includes('柔和光线') && !JSON.stringify(req).includes('低饱和色调'));
     await act(`chipTest.field('角色 1 加入生成').click()`); await generate();
     check('disabledCharacterRetainsChipsButIsNotSent', await run(`chipTest.requests[1].parameters.characterPrompts.length===0&&chipTest.params().characters[0].captionChips.length===1&&chipTest.params().seed===null`));

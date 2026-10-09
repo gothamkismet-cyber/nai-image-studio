@@ -5,7 +5,7 @@ module.exports = async function afterArtifacts(context) {
   const checksums = [];
   for (const file of context.artifactPaths) {
     const filename = path.basename(file);
-    if (!/^NAI生图台-Setup-\d+\.\d+\.\d+\.exe$/.test(filename)) continue;
+    if (!/^(?:NAI生图台|NAI-Image-Studio)-Setup-\d+\.\d+\.\d+\.exe$/.test(filename)) continue;
     const hash = crypto.createHash("sha256");
     for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
     const sidecar = file + ".sha256";

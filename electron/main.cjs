@@ -1,8 +1,8 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, clipboard, ClipboardItem, nativeImage, net, shell } = require("electron");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
-require("./updates.cjs").registerUpdates({ app, BrowserWindow, ipcMain, dialog });
+require("./updates.cjs").registerUpdates({ app, BrowserWindow, ipcMain, dialog, net, shell });
 
 // 词库默认探测路径：配置为空时尝试，命中即零配置融合
 const DEFAULT_LIB_DIR = "D:\\nai提示词";

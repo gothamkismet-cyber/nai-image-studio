@@ -3,6 +3,69 @@ const crypto = require("node:crypto"), { execFile, spawn } = require("node:child
 const { promisify } = require("node:util");
 const runFile = promisify(execFile);
 const APP_GUID = "ffcd3877-c614-52f9-84f7-1d5625f865ef";
+const REPO_URL = "https://github.com/gothamkismet-cyber/nai-image-studio";
+const LATEST_RELEASE_API = "https://api.github.com/repos/gothamkismet-cyber/nai-image-studio/releases/latest";
+
+async function readReleaseResponse(response, limit) {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("GitHub 返回的版本信息不完整，请稍后重试。");
+  const chunks = []; let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > limit) throw new Error("GitHub 返回的版本信息过大，请稍后重试。");
+      chunks.push(Buffer.from(value));
+    }
+  } finally { await reader.cancel().catch(() => {}); }
+  return Buffer.concat(chunks).toString("utf8");
+}
+async function checkLatestReleasePage(currentVersion, fetchRelease) {
+  const response = await fetchRelease(`${REPO_URL}/releases/latest`, {
+    headers: { Accept: "text/html", "User-Agent": "NAI-Image-Studio" },
+    redirect: "follow", credentials: "omit", signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) throw new Error("GitHub 下载页暂时无法读取。");
+  const html = await readReleaseResponse(response, 512 * 1024);
+  const meta = html.match(/<meta\b[^>]*>/gi)?.find(tag => /\bproperty\s*=\s*["']og:url["']/i.test(tag));
+  const canonical = meta?.match(/\bcontent\s*=\s*["']([^"']+)["']/i)?.[1];
+  let url;
+  try { url = new URL(canonical || "", REPO_URL).href; } catch { throw new Error("GitHub 下载页版本无法读取。"); }
+  const prefix = `${REPO_URL}/releases/tag/`;
+  const match = url.startsWith(prefix) && /^v(\d+\.\d+\.\d+)$/.exec(url.slice(prefix.length));
+  if (!match) throw new Error("GitHub 下载页版本不符合本软件的发布规则。");
+  // /releases/latest 由 GitHub 指向最新正式发布；网页只提供版本，不推测安装包是否存在。
+  return { state: "ready", latestVersion: match[1], newer: compareVersions(match[1], currentVersion) > 0,
+    url, notes: "", publishedAt: "", installerAvailable: null, source: "page" };
+}
+async function checkLatestRelease(currentVersion, fetchRelease = globalThis.fetch) {
+  const response = await fetchRelease(LATEST_RELEASE_API, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "NAI-Image-Studio" },
+    redirect: "error", credentials: "omit", signal: AbortSignal.timeout(12000),
+  });
+  if (response.status === 404) throw new Error("GitHub 暂时没有可下载的正式版本，请稍后重试。");
+  if (response.status === 403 || response.status === 429) {
+    try { return await checkLatestReleasePage(currentVersion, fetchRelease); }
+    catch { throw new Error("GitHub 查询次数暂时用完了，下载页也无法读取，请稍后重试。"); }
+  }
+  if (!response.ok) throw new Error(`检查新版失败（HTTP ${response.status}），请稍后重试。`);
+  const json = await readReleaseResponse(response, 256 * 1024);
+  let data;
+  try { data = JSON.parse(json); }
+  catch { throw new Error("GitHub 返回的版本信息无法读取，请稍后重试。"); }
+  const match = /^v(\d+\.\d+\.\d+)$/.exec(data?.tag_name);
+  if (!match || data.draft !== false || data.prerelease !== false || data.html_url !== `${REPO_URL}/releases/tag/${data.tag_name}`) {
+    throw new Error("GitHub 返回的版本信息不符合本软件的发布规则，请到仓库下载页核对。");
+  }
+  const version = match[1];
+  const names = new Set(Array.isArray(data.assets) ? data.assets.map(a => a?.name) : []);
+  const filename = `NAI-Image-Studio-Setup-${version}.exe`;
+  return { state: "ready", latestVersion: version, newer: compareVersions(version, currentVersion) > 0,
+    url: data.html_url, notes: typeof data.body === "string" ? data.body.slice(0, 4000) : "",
+    publishedAt: typeof data.published_at === "string" && Number.isFinite(Date.parse(data.published_at)) ? data.published_at : "",
+    installerAvailable: names.has(filename) && names.has(filename + ".sha256"), source: "api" };
+}
 
 function compareVersions(a, b) {
   const parse = (v) => {
@@ -31,8 +94,8 @@ async function readInstallerVersion(file) {
 async function inspectInstaller(file, readVersion = readInstallerVersion) {
   const resolved = await fsp.realpath(file);
   const filename = path.basename(resolved);
-  const match = /^NAI生图台-Setup-(\d+\.\d+\.\d+)\.exe$/i.exec(filename);
-  if (!match) throw new Error("请选择 NAI生图台-Setup-版本号.exe 安装包，不能选择程序本体或便携版。");
+  const match = /^(?:NAI生图台|NAI-Image-Studio)-Setup-(\d+\.\d+\.\d+)\.exe$/i.exec(filename);
+  if (!match) throw new Error("请选择 NAI-Image-Studio-Setup-版本号.exe 或 NAI生图台-Setup-版本号.exe 安装包，不能选择程序本体或便携版。");
   const stat = await fsp.stat(resolved);
   if (!stat.isFile() || stat.size < 1024 || stat.size > 1024 * 1024 * 1024) throw new Error("安装包文件大小不正确。");
   const handle = await fsp.open(resolved, "r");
@@ -60,11 +123,12 @@ function launchInstaller(file) {
   });
 }
 
-function registerUpdates({ app, ipcMain, dialog, BrowserWindow }, deps = {}) {
+function registerUpdates({ app, ipcMain, dialog, BrowserWindow, net, shell }, deps = {}) {
   const inspect = deps.inspectInstaller || inspectInstaller;
   const launch = deps.launchInstaller || launchInstaller;
   const quit = deps.scheduleQuit || (() => setTimeout(() => app.quit(), 200));
   const platform = deps.platform || process.platform;
+  const checkingRelease = new Set();
   const pending = new Map(), choosing = new Set(), owners = new WeakSet();
   let installing = false;
   function windowFor(event) {
@@ -84,6 +148,26 @@ function registerUpdates({ app, ipcMain, dialog, BrowserWindow }, deps = {}) {
     windowFor(event);
     return { version: app.getVersion(), available: platform === "win32" && app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR,
       installDir: app.isPackaged ? path.dirname(app.getPath("exe")) : "", mode: "local" };
+  });
+  ipcMain.handle("updates:check-latest", async (event) => {
+    let owner, claimed = false;
+    try {
+      const win = windowFor(event); owner = event.sender.id;
+      if (checkingRelease.has(owner)) throw new Error("正在检查新版，请稍候。");
+      checkingRelease.add(owner);
+      claimed = true;
+      const result = await checkLatestRelease(app.getVersion(), deps.fetchRelease || net.fetch.bind(net));
+      return win.isDestroyed() ? { state: "error", message: "更新窗口已关闭，请重新检查。" } : result;
+    } catch (e) {
+      const message = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")
+        ? "检查新版超时，请检查网络或代理后重试。"
+        : e instanceof Error && /GitHub|检查新版|正在检查/.test(e.message) ? e.message : "连不上 GitHub，请检查网络或代理后重试。";
+      return { state: "error", message };
+    } finally { if (claimed) checkingRelease.delete(owner); }
+  });
+  ipcMain.handle("updates:open-releases", async (event) => {
+    try { windowFor(event); await (deps.openExternal || shell.openExternal)(`${REPO_URL}/releases/latest`); return { ok: true }; }
+    catch { return { ok: false, message: "下载页无法打开，请手动访问 GitHub 仓库的 Releases。" }; }
   });
   ipcMain.handle("updates:choose", async (event) => {
     try {
@@ -128,4 +212,4 @@ function registerUpdates({ app, ipcMain, dialog, BrowserWindow }, deps = {}) {
     } catch (e) { return { state: "error", message: e instanceof Error ? e.message : "安装程序启动失败，当前生图台仍保留。请重试。" }; }
   });
 }
-module.exports = { registerUpdates, compareVersions, inspectInstaller, hashFile, APP_GUID };
+module.exports = { registerUpdates, compareVersions, inspectInstaller, hashFile, checkLatestRelease, APP_GUID };

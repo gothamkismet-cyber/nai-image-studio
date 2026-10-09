@@ -13,7 +13,8 @@ const ready=new Promise(resolve=>app.once('browser-window-created',(_e,win)=>{
 require(process.env.NAI_VERIFY_ASAR?path.join(path.resolve(process.env.NAI_VERIFY_ASAR),'electron/main.cjs'):'../electron/main.cjs');
 function loadModule(file,expose){
   const mod={exports:{}};
-  const code=stripTypeScriptTypes(fs.readFileSync(file,'utf8'),{mode:'transform'}).replace('import JSZip from "jszip";','const JSZip=require("jszip");').replace(/^export /gm,'')+'\nmodule.exports={'+expose+'};';
+  const types=file.endsWith('nai.ts')?stripTypeScriptTypes(fs.readFileSync('src/types.ts','utf8'),{mode:'transform'}).replace(/^export /gm,'')+'\n':'';
+  const code=types+stripTypeScriptTypes(fs.readFileSync(file,'utf8'),{mode:'transform'}).replace('import JSZip from "jszip";','const JSZip=require("jszip");').replace(/^import .*;$/gm,'').replace(/^export /gm,'')+'\nmodule.exports={'+expose+'};';
   vm.runInNewContext(code,{module:mod,require,crypto:require('node:crypto').webcrypto});return mod.exports;
 }
 function checkPayload(body){
@@ -88,11 +89,11 @@ function unitChecks(){
   await run(`charsTest.fill(charsTest.field('角色 2 名称'),'小红');charsTest.fill(charsTest.field('角色 2 提示词'),'girl, red coat');charsTest.field('角色 2 加入生成').click();charsTest.button('＋ 角色').click();`);await sleep(100);
   out.ui={togglePreservesText:await run(`charsTest.field('角色 2 提示词').value==='girl, red coat'&&charsTest.field('角色 2 名称').value==='小红'&&!charsTest.field('角色 2 加入生成').checked`),libraryNames:await run(`charsTest.field('词库插入目标').textContent.includes('小红（停用）')&&charsTest.field('词库插入目标').textContent.includes('小蓝')`)};
   await run(`charsTest.field('角色 1 提示词').closest('.prompt-textarea').parentElement.querySelectorAll('button')[2].click()`);await sleep(80);
-  await run(`charsTest.field('角色 1 提示词').closest('.prompt-textarea').parentElement.querySelector('[aria-label="位置：上左"]').click()`);await sleep(80);
+  await run(`const p=charsTest.field('角色 1 自由定位');p.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',shiftKey:true,bubbles:true}));p.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',shiftKey:true,bubbles:true}));`);await sleep(80);
   const installMock=`window.captured=[];window.originalFetch=window.fetch;window.holdGeneration=false;window.failGeneration=false;window.fetch=async(url,opt)=>{if(String(url).startsWith('data:'))return originalFetch(url,opt);if(url!=='https://image.novelai.net/ai/generate-image')throw Error('External request blocked');const body=JSON.parse(opt.body);captured.push(body);if(holdGeneration)await new Promise(r=>window.releaseGeneration=r);if(failGeneration||!Array.isArray(body.parameters.characterPrompts)||!body.parameters.v4_prompt?.caption||!body.parameters.v4_negative_prompt?.caption)return Response.json({statusCode:500,message:'Synthetic server failure'},{status:500});const c=document.createElement('canvas');c.width=8;c.height=12;const ctx=c.getContext('2d');ctx.fillStyle='#579';ctx.fillRect(0,0,8,12);return Response.json({images:[{image:c.toDataURL('image/png').split(',')[1],seed:body.parameters.seed}]});};`;
   await run(installMock+";void 0");
   await run(`window.holdGeneration=true;charsTest.button('生成').click()`);await wait('captured.length===1','request');
-  out.ui.busyLocks=await run(`charsTest.field('角色 1 名称').disabled&&charsTest.field('角色 1 加入生成').disabled&&document.querySelector('[aria-label="位置：上左"]').disabled`);
+  out.ui.busyLocks=await run(`charsTest.field('角色 1 名称').disabled&&charsTest.field('角色 1 加入生成').disabled&&charsTest.field('角色 1 自由定位').disabled`);
   checkPayload(await run('captured[0]'));out.ui.v5Request=true;
   const body=await run('captured[0]');assert.equal(body.model,'nai-diffusion-5-full');assert.equal(body.parameters.characterPrompts.length,1);assert.equal(body.parameters.characterPrompts[0].prompt,'girl, blue coat');assert.equal(body.parameters.use_coords,true);assert.ok(!JSON.stringify(body).includes('小蓝'));
   await run(`releaseGeneration();window.holdGeneration=false;`);await wait(`charsTest.button('生成')&&!document.querySelector('[role="alert"]')&&document.querySelector('img[alt="历史图片"]')`,'generated preview/history');out.ui.generated=true;

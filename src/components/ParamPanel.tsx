@@ -1,4 +1,4 @@
-import { MODELS, SAMPLERS, NOISE_SCHEDULES, SIZE_PRESETS, isV4Model, snapSize, clampSeed, type GenParams } from "../types";
+import { MODELS, SAMPLERS, NOISE_SCHEDULES, SIZE_PRESETS, isV4Model, isV5Model, isMediumModel, effectiveGenerationParams, snapSize, clampSeed, type GenParams } from "../types";
 import CharPrompts from "./CharPrompts";
 import type { LibTarget } from "./PromptLibraryDialog";
 import { useState } from "react";
@@ -20,6 +20,8 @@ function randomSeed(): number {
 }
 
 export default function ParamPanel({ params, artists, busy, onChange, onGenerate, onCancel, onOpenLibrary }: Props) {
+  const v5 = isV5Model(params.model), medium = isMediumModel(params.model);
+  const effective = effectiveGenerationParams(params);
   const sizePresetMatched = SIZE_PRESETS.some((s) => s.w === params.width && s.h === params.height);
   const [colors, setColors] = useState(loadPromptColors);
   const [colorNotice, setColorNotice] = useState("");
@@ -36,17 +38,27 @@ export default function ParamPanel({ params, artists, busy, onChange, onGenerate
         <label className="block">
           <span className="mb-1.5 block text-xs font-semibold tracking-wide text-zinc-500 uppercase">模型</span>
           <select
-            value={params.model}
+            aria-label="生成模型"
+            value={medium ? "nai-diffusion-5-full" : params.model}
             onChange={(e) => onChange({ model: e.target.value })}
             className="w-full cursor-pointer rounded-lg border border-zinc-700/80 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-violet-500/70 focus:ring-2 focus:ring-violet-500/20 transition-colors"
           >
-            {MODELS.map((m) => (
+            {MODELS.filter(m => !isMediumModel(m.id)).map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
               </option>
             ))}
           </select>
         </label>
+
+        {(params.model === "nai-diffusion-5-full" || medium) && <div className="model-features">
+          <span className="text-sm font-medium">生成模式</span>
+          <div className="effort-options">
+            <button type="button" aria-pressed={!medium} disabled={busy} onClick={() => onChange({ model: "nai-diffusion-5-full" })}>High · 常规</button>
+            <button type="button" aria-pressed={medium} disabled={busy} onClick={() => onChange({ model: "nai-diffusion-5-full-medium" })}>Medium · 省额度</button>
+          </div>
+          <p>{medium ? "固定 14 步、Euler Ancestral 和官方负面预设。自定义负面词、对比度修正暂不参与；切回 High 恢复原编辑值。要排除帽子等内容，可在主提示词写 -3::hat::。" : "保留完整参数控制。Medium 使用专门模型，默认参数下官方给出的用量约少 42%；实际消耗以账户为准。"}</p>
+        </div>}
 
         {/* 提示词 */}
         <div>
@@ -91,17 +103,19 @@ export default function ParamPanel({ params, artists, busy, onChange, onGenerate
 
         {/* 负面提示词 */}
         <div className="rounded-lg border border-zinc-800">
-          <div className="flex items-center justify-between px-3 py-2"><label htmlFor="negative-prompt" className="text-sm font-medium text-zinc-300">负面词 · 不想要什么</label><button type="button" onClick={() => onOpenLibrary({ kind: "negative" })} className="subtle-button">词库</button></div>
+          <div className="flex items-center justify-between px-3 py-2"><label htmlFor="negative-prompt" className="text-sm font-medium text-zinc-300">负面词 · 不想要什么</label><button type="button" disabled={medium} onClick={() => onOpenLibrary({ kind: "negative" })} className="subtle-button">词库</button></div>
           <PromptEditor colors={colors} artists={artists} model={params.model}
             id="negative-prompt"
             aria-label="负面提示词"
             value={params.negativePrompt}
+            disabled={medium}
             chips={params.negativePromptChips}
             onValueChange={(negativePrompt, negativePromptChips) => onChange({ negativePrompt, negativePromptChips })}
             rows={3}
             placeholder="lowres, bad anatomy, ..."
             className="w-full resize-y border-t border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-violet-500/70 focus:ring-2 focus:ring-violet-500/20 transition-colors"
           />
+          {medium && <p className="feature-note">Medium 使用固定官方预设；这里的文字已保留，当前不发送。</p>}
         </div>
 
         {/* 尺寸 */}
@@ -156,13 +170,15 @@ export default function ParamPanel({ params, artists, busy, onChange, onGenerate
         {/* 步数 */}
         <label className="block">
           <span className="mb-1 flex items-baseline justify-between text-sm font-medium text-zinc-300">
-            步数 <span className="text-zinc-500">{params.steps}</span>
+            步数 <span className="text-zinc-500">{effective.steps}{medium ? " · 固定" : ""}</span>
           </span>
           <input
             type="range"
             min={1}
             max={50}
-            value={params.steps}
+            aria-label="生成步数"
+            disabled={medium}
+            value={effective.steps}
             onChange={(e) => onChange({ steps: Number(e.target.value) })}
             className="w-full accent-violet-500"
           />
@@ -187,14 +203,16 @@ export default function ParamPanel({ params, artists, busy, onChange, onGenerate
         {/* CFG rescale */}
         <label className="block">
           <span className="mb-1 flex items-baseline justify-between text-sm font-medium text-zinc-300">
-            对比度修正 (Rescale) <span className="text-zinc-500">{params.cfgRescale}</span>
+            对比度修正 (Rescale) <span className="text-zinc-500">{effective.cfgRescale}{medium ? " · 不支持" : ""}</span>
           </span>
           <input
             type="range"
             min={0}
             max={1}
             step={0.05}
-            value={params.cfgRescale}
+            aria-label="对比度修正"
+            disabled={medium}
+            value={effective.cfgRescale}
             onChange={(e) => onChange({ cfgRescale: Number(e.target.value) })}
             className="w-full accent-violet-500"
           />
@@ -205,7 +223,9 @@ export default function ParamPanel({ params, artists, busy, onChange, onGenerate
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-zinc-300">采样器</span>
             <select
-              value={params.sampler}
+              aria-label="采样器"
+              disabled={medium}
+              value={effective.sampler}
               onChange={(e) => onChange({ sampler: e.target.value })}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-zinc-100 outline-none focus:border-violet-500/70 focus:ring-2 focus:ring-violet-500/20 transition-colors"
             >
@@ -219,7 +239,9 @@ export default function ParamPanel({ params, artists, busy, onChange, onGenerate
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-zinc-300">噪声表</span>
             <select
-              value={params.noiseSchedule}
+              aria-label="噪声表"
+              disabled={v5}
+              value={effective.noiseSchedule}
               onChange={(e) => onChange({ noiseSchedule: e.target.value })}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-zinc-100 outline-none focus:border-violet-500/70 focus:ring-2 focus:ring-violet-500/20 transition-colors"
             >
@@ -281,10 +303,24 @@ export default function ParamPanel({ params, artists, busy, onChange, onGenerate
           />
           追加官方质量标签
         </label>
+        {v5 && <div className="model-features">
+          <label className="feature-control">质量标签强度
+            <select aria-label="V5 质量标签强度" disabled={!params.qualityToggle} value={params.qualityPreset ?? "standard"}
+              onChange={e => onChange({ qualityPreset: e.target.value === "light" ? "light" : "standard" })}>
+              <option value="standard">Standard · 标准</option><option value="light">Light · 轻量</option>
+            </select>
+          </label>
+          <label className="feature-control"><input type="checkbox" checked={params.transparentBackground === true}
+            onChange={e => onChange({ transparentBackground: e.target.checked })} />透明背景</label>
+          <label className="feature-control"><input type="checkbox" checked={params.autoText !== false}
+            onChange={e => onChange({ autoText: e.target.checked })} />引号自动转为画面文字</label>
+          <p>透明背景会追加对应标签并保留 PNG 透明通道。引号里的文字按主提示词、角色顺序加入画面文字区块；已有 Text: 时沿用你写的内容。V5 噪声表固定为 Karras。</p>
+          <p>V5 的 Opus 免费生成有使用上限；这里不估算账户余额。</p>
+        </div>}
       </div>
 
       <div className="generate-footer">
-        <div className="generate-meta"><span>单张生成</span><span>{params.width} × {params.height} · {params.steps} 步</span></div>
+        <div className="generate-meta"><span>{medium ? "Medium · 单张生成" : "单张生成"}</span><span>{params.width} × {params.height} · {effective.steps} 步</span></div>
         <button
           type="button"
           onClick={busy ? onCancel : onGenerate}

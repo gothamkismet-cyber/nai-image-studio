@@ -579,3 +579,21 @@ button:not(:disabled), summary { cursor: pointer; }
   .generate-meta { display:none; }
   .generate-footer { padding:8px 12px; }
 }
+
+.model-features { border:1px solid #76cdb936; border-radius:9px; padding:12px; background:#76cdb908; color:#d3e6df; }
+.model-features p,.feature-note { margin:8px 0 0; color:#a7bab7; font-size:11px; line-height:1.8; }
+.feature-note { padding:0 12px 10px; }
+.effort-options { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.effort-options button { flex:1; min-height:36px; padding:6px 10px; border:1px solid #ffffff25; border-radius:7px; background:#17262b; font-size:12px; }
+.effort-options button[aria-pressed="true"] { background:#76cdb929; border-color:#83d6bc; color:#c2f4df; }
+.feature-control { display:flex; align-items:center; gap:8px; margin:8px 0; font-size:12px; }
+.feature-control select { min-width:0; flex:1; min-height:34px; border:1px solid #ffffff25; border-radius:6px; background:#17262b; padding:5px; }
+.model-features input { accent-color:#83d6bc; }
+.editor-fields input:disabled,.editor-fields select:disabled,.editor-fields button:disabled { cursor:default; opacity:.55; }
+.free-position { position:relative; width:104px; flex-shrink:0; touch-action:none; overflow:hidden; border:1px solid #76cdb96b; border-radius:7px; background-color:#16262c; background-image:linear-gradient(#ffffff14 1px,transparent 1px),linear-gradient(90deg,#ffffff14 1px,transparent 1px); background-size:33.333% 33.333%; }
+.free-position:focus-visible { outline:2px solid #b7ffe2; outline-offset:3px; }
+.position-dot { position:absolute; width:12px; height:12px; transform:translate(-50%,-50%); border:2px solid #c5ffe8; border-radius:50%; background:#449f83; pointer-events:none; }
+.update-online-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.update-release { margin:12px 0; border:1px solid #76cdb940; border-radius:8px; padding:12px; background:#76cdb90d; font-size:12px; line-height:1.8; }
+.update-release h3 { color:#c2f4df; font-weight:600; }
+.update-release pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow-y:auto; font:inherit; color:#b1c3bd; }

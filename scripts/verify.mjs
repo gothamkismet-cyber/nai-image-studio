@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const evidence = fs.mkdtempSync(path.join(os.tmpdir(), "nai-source-tests-"));
 const electron = require("electron");
-const checks = ["prompt-chips", "seed", "personal-prompts"];
+const checks = ["prompt-chips", "seed", "personal-prompts", "v5", "release-check"];
 const env = { ...process.env };
 for (const key of ["ELECTRON_RUN_AS_NODE", "NAI_VERIFY_ASAR", "NAI_VERIFY_EXPECT_LEGACY", "NAI_VERIFY_RESTART_PROFILE", "NAI_VERIFY_REDUCED_MOTION"]) delete env[key];
 

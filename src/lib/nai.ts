@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import type { GenParams } from "../types";
+import { characterLimit, effectiveGenerationParams, isMediumModel } from "../types";
 
 export const IMAGE_ENDPOINT = "https://image.novelai.net/ai/generate-image";
 export const SUBSCRIPTION_ENDPOINT = "https://image.novelai.net/user/subscription";
@@ -53,7 +54,7 @@ function mapError(status: number, body: string): NaiError {
       return new NaiError("Token 无效或已过期。请打开右上角「API 配置」检查 NovelAI API Token。", 401);
     case 402:
       return new NaiError(
-        "Anlas 不足：当前参数组合可能超出订阅免费额度（消耗量随尺寸、步数变化）。可以缩小尺寸或减少步数后重试。",
+        "可用额度不足：V5 的 Opus 免费生成也有使用上限。可以等待额度恢复、调整尺寸，或试用 V5 全量版的 Medium 模式；以账户实际额度为准。",
         402,
       );
     case 429:
@@ -64,9 +65,15 @@ function mapError(status: number, body: string): NaiError {
 }
 
 /** V4/V5 都需要正负 caption；characterPrompts 与其角色顺序/坐标保持一致。 */
-export function buildPayload(p: GenParams) {
+export function buildPayload(raw: GenParams) {
+  const p = effectiveGenerationParams(raw);
   const isV4 = p.model.startsWith("nai-diffusion-4");
   const isV5 = p.model.startsWith("nai-diffusion-5");
+  const medium = isMediumModel(p.model);
+  const chars = p.characters.filter(c => c.enabled !== false && c.caption.trim().length > 0);
+  if ((isV4 || isV5) && chars.length > characterLimit(p.model)) throw new NaiError(`当前模型最多同时使用 ${characterLimit(p.model)} 个角色，请停用多出的角色或切换到 V5。`, 0);
+  const prompt = isV5 ? prepareV5Prompt(p, chars) : p.prompt;
+  const negative = medium ? V5_HEAVY_NEGATIVE : p.negativePrompt;
   const parameters: Record<string, unknown> = {
     params_version: isV4 || isV5 ? 4 : 3,
     width: p.width,
@@ -89,32 +96,78 @@ export function buildPayload(p: GenParams) {
   };
   if (isV4 || isV5) {
     // 空白/停用角色只留在本机，名称/id 等界面信息不进入 API。
-    const chars = (p.characters ?? []).filter(c => c.enabled !== false && c.caption.trim().length > 0);
     const coordinate = (v: number) => Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5;
     const centerOf = (c: GenParams["characters"][number]) => c.positionMode === "custom"
       ? { x: coordinate(c.x), y: coordinate(c.y) } : { x: 0.5, y: 0.5 };
     const useCoords = chars.some(c => c.positionMode === "custom");
     Object.assign(parameters, {
       legacy_v3_extend: false, sm: false, sm_dyn: false, add_original_image: true,
-      negative_prompt: p.negativePrompt, use_coords: useCoords, legacy_uc: false,
+      negative_prompt: negative, use_coords: useCoords, legacy_uc: false,
       characterPrompts: chars.map(c => ({ prompt: c.caption, uc: c.negative, center: centerOf(c), enabled: true })),
     });
     // 官方 v4Prompts: !0 表示 true，V5 也走这组结构。零角色时同样保留。
     parameters.v4_prompt = {
-      caption: { base_caption: p.prompt, char_captions: chars.map(c => ({ char_caption: c.caption, centers: [centerOf(c)] })) },
+      caption: { base_caption: prompt, char_captions: chars.map(c => ({ char_caption: c.caption, centers: [centerOf(c)] })) },
       use_coords: useCoords, use_order: true,
     };
     parameters.v4_negative_prompt = {
-      caption: { base_caption: p.negativePrompt, char_captions: chars.map(c => ({ char_caption: c.negative, centers: [centerOf(c)] })) },
+      caption: { base_caption: negative, char_captions: chars.map(c => ({ char_caption: c.negative, centers: [centerOf(c)] })) },
       legacy_uc: false,
     };
-    if (isV5) parameters.image_format = "png";
+    if (isV5) {
+      delete parameters.qualityToggle;
+      delete parameters.ucPreset;
+      parameters.image_format = "png";
+      parameters.straight_alpha = true;
+      parameters.tag_hint_transparent_background = p.transparentBackground === true;
+      parameters.tag_hint_qt = !p.qualityToggle ? 0 : p.qualityPreset === "light" ? 3 : 1;
+      if (medium) { parameters.tag_hint_uc_preset = 2; delete parameters.cfg_rescale; }
+    }
   } else {
     parameters.negative_prompt = p.negativePrompt;
     parameters.sm = false;
     parameters.sm_dyn = false;
   }
-  return { input: p.prompt, model: p.model, action: "generate", parameters };
+  return { input: prompt, model: p.model, action: "generate", parameters };
+}
+
+// 与官方 Medium 固定 heavy 预设对应；用户自己的负面词始终保留在编辑器里。
+const V5_HEAVY_NEGATIVE = "lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page";
+
+function quotedText(text: string): string[] {
+  const quotes: Record<string, string> = { '"': '"', "“": "”", "「": "」", "'": "'", "‘": "’" };
+  const found: string[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const endQuote = quotes[text[i]];
+    if (!endQuote || (text[i] === "'" && i > 0 && !/[\s,.]/.test(text[i - 1]))) continue;
+    let end = i + 1;
+    while (end < text.length && (text[end] !== endQuote || ((endQuote === "'" || endQuote === "’") && /[\p{L}\p{N}]/u.test(text[end + 1] ?? "")))) end++;
+    if (end === text.length) continue;
+    const content = text.slice(i + 1, end).trim();
+    if (content) found.push(content);
+    i = end;
+  }
+  return found;
+}
+
+/** 在请求副本中追加 V5 标签和 teXt 区块，绝不重写用户的提示词或名称标签。 */
+function prepareV5Prompt(p: GenParams, chars: GenParams["characters"]): string {
+  const textMarker = /(?:^|\s|[,.:[\]{}、。])text:(?!:)/i;
+  const manual = textMarker.exec(p.prompt);
+  const split = manual ? manual.index : p.prompt.length;
+  const tags = [p.transparentBackground ? "transparent background" : "", p.qualityToggle
+    ? `very aesthetic, ${p.qualityPreset === "light" ? "amazing quality" : "masterpiece"}, no text` : ""].filter(Boolean);
+  const texts = !manual && p.autoText !== false && !chars.some(c => textMarker.test(c.caption))
+    ? [p.prompt, ...chars.map(c => c.caption)].flatMap(quotedText) : [];
+  if (!tags.length && !texts.length) return p.prompt;
+  let prompt = p.prompt.slice(0, split).replace(/[\s,]+$/, "");
+  if (tags.length) prompt = [prompt, ...tags].filter(Boolean).join(", ");
+  if (manual) {
+    const markerAt = manual.index + manual[0].toLowerCase().indexOf("text:");
+    return `${prompt}${prompt ? ", " : ""}${p.prompt.slice(markerAt)}`;
+  }
+  if (texts.length) prompt = `${prompt}${prompt ? ", " : ""}teXt: ${texts.join("\n\n")}`;
+  return prompt;
 }
 
 /** 可中止的延时：演示模式取消用 */

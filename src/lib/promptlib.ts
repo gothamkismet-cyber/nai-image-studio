@@ -57,6 +57,8 @@ declare global {
       pickPromptLibDir: () => Promise<DesktopIpcResult>;
       copyImage?: (png: Uint8Array) => Promise<{ ok: boolean; message?: string }>;
       updateInfo?: () => Promise<import("../components/UpdateDialog").UpdateInfo>;
+      checkLatestRelease?: () => Promise<import("../components/UpdateDialog").ReleaseCheck>;
+      openReleases?: () => Promise<{ ok: boolean; message?: string }>;
       chooseUpdate?: () => Promise<import("../components/UpdateDialog").UpdateResult>;
       installUpdate?: (id: string) => Promise<import("../components/UpdateDialog").UpdateResult>;
     };

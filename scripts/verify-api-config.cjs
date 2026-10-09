@@ -19,7 +19,7 @@ const windowReady = new Promise(resolve => app.once('browser-window-created', (_
 require(process.env.NAI_VERIFY_ASAR ? path.join(path.resolve(process.env.NAI_VERIFY_ASAR), 'electron/main.cjs') : '../electron/main.cjs');
 
 async function verifyClient() {
-  const compiled = stripTypeScriptTypes(fs.readFileSync(path.resolve(__dirname, '../src/lib/nai.ts'),'utf8'), {mode:'transform'}).replace('import JSZip from "jszip";', 'const JSZip = require("jszip");').replace(/^export /gm, '') + '\nmodule.exports = {checkToken};';
+  const compiled = stripTypeScriptTypes(fs.readFileSync(path.resolve(__dirname, '../src/lib/nai.ts'),'utf8'), {mode:'transform'}).replace('import JSZip from "jszip";', 'const JSZip = require("jszip");').replace(/^import .*;$/gm, '').replace(/^export /gm, '') + '\nmodule.exports = {checkToken};';
   const mod = { exports: {} }; let responder; let requests = 0; let lastUrl; let lastHeader;
   vm.runInNewContext(compiled, { module: mod, exports: mod.exports, require, DOMException, AbortSignal: { timeout: () => AbortSignal.timeout(30), any: signals => AbortSignal.any(signals) }, fetch: async (url, options) => { requests++; lastUrl=url; lastHeader=options.headers.Authorization; return responder(options); } });
   const { checkToken } = mod.exports;console.log('[API_STAGE] client');

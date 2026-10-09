@@ -1,20 +1,25 @@
 # NAI 生图台
 
-一个用 React、TypeScript 和 Electron 编写的 NovelAI 图像生成工作台。当前源码版本为 **0.2.11**，主要支持 Windows 桌面端，也可在浏览器中开发和预览。
+一个用 React、TypeScript 和 Electron 编写的 NovelAI 图像生成工作台。当前源码版本为 **0.2.12**，主要支持 Windows 桌面端，也可在浏览器中开发和预览。
 
 ## 下载与安装（Windows 64 位）
 
-**[下载安装包（.exe）](https://github.com/gothamkismet-cyber/nai-image-studio/releases/download/v0.2.11/NAI-Image-Studio-Setup-0.2.11.exe)** · [查看最新版下载页](https://github.com/gothamkismet-cyber/nai-image-studio/releases/latest)
+**[下载安装包（.exe）](https://github.com/gothamkismet-cyber/nai-image-studio/releases/download/v0.2.12/NAI-Image-Studio-Setup-0.2.12.exe)** · [查看最新版下载页](https://github.com/gothamkismet-cyber/nai-image-studio/releases/latest)
 
-选择 `NAI-Image-Studio-Setup-0.2.11.exe`，下载后双击安装即可，不需要安装 Node.js 或自行编译。首次启动可先用演示模式体验；真实生图需要自己的 NovelAI API Token。下载页也提供同名的 `.exe.sha256` 文件供核对完整性。
+选择 `NAI-Image-Studio-Setup-0.2.12.exe`，下载后双击安装即可，不需要安装 Node.js 或自行编译。首次启动可先用演示模式体验；真实生图需要自己的 NovelAI API Token。下载页也提供同名的 `.exe.sha256` 文件供核对完整性。
 
-如需使用已有软件里的“本地覆盖更新”，下载 [本地更新包（ZIP）](https://github.com/gothamkismet-cyber/nai-image-studio/releases/download/v0.2.11/NAI-Image-Studio-0.2.11-local-update.zip)，解压后选择其中的 `NAI生图台-Setup-0.2.11.exe`。解压后的安装包和 `.exe.sha256` 保留更新器所需的原文件名，请放在一起使用。
+0.2.12 起，可在“软件更新”中点击“检查新版”，查看 GitHub 正式发布并打开下载页。公开接口限流时，改从 GitHub 下载页读取版本。下载 `.exe` 和同名 `.exe.sha256` 后，可直接选择英文名安装包覆盖升级。
+
+从 0.2.11 或更早的版本使用软件内更新时，下载 [旧版兼容更新包（ZIP）](https://github.com/gothamkismet-cyber/nai-image-studio/releases/download/v0.2.12/NAI-Image-Studio-0.2.12-local-update.zip)，解压后选择其中的 `NAI生图台-Setup-0.2.12.exe`。也可直接双击英文名安装器升级。已有版本的更新器只接受中文文件名，ZIP 保留了所需名称与配套校验文件。
 
 本版本安装包采用 MIT 许可，包含许可文本。发布包不含作者的 Token、个人收藏、生成历史或本地提示词库；可在软件里连接自己的词库。
 
 ## 功能
 
 - 编辑主提示词、负面提示词和角色提示词，调整模型、尺寸、步数、采样器及 Seed（随机种子）。
+- V5 全量版支持 High / Medium 切换。Medium 使用官方专门模型，固定 14 步和 Euler Ancestral，不发送自定义负面词或 Rescale；切回 High 保留原编辑值。
+- V5 支持最多 32 个角色输入栏、点击或拖动自由定位及方向键微调。旧模型限 6 个同时使用的角色；切换模型保留已有内容，超过上限时提示停用。
+- V5 可选 Standard / Light 质量标签、透明背景和引号自动画面文字；变换仅作用于请求副本，不覆盖提示词及名称标签。
 - Seed 留空时，每次生成重新抽取；填写固定值或载入历史参数时可重复使用。
 - “我的提示词”保存常用内容，插入后显示名称小框，支持查看全文、单独移除、撤销及展开编辑；生成仍使用完整文本。
 - 按语法为提示词着色，支持角色名称、启用开关与位置设置。
@@ -23,6 +28,8 @@
 - 配置兼容的识图接口，从图片提取提示词。
 - 演示模式使用本地占位图，可在没有 Token 的情况下体验编辑和历史流程。
 - Windows 安装器支持本地覆盖更新及配套 SHA-256 文件校验。
+
+这版按 **2026-10-09** 的官方公告与生产界面核对；[功能来源与适配范围](docs/novelai-2026-10-09.md) 记录已支持和待支持的部分。V5 的 Opus 免费生成有使用上限，实际额度以账户为准。
 
 ## 从源码运行
 
@@ -80,7 +87,7 @@ npm run dist
 npm run dist -- --config.directories.output=C:/nai-release
 ```
 
-项目未配置代码签名。哈希文件用于核对文件完整性，不证明发布者身份。本地更新流程不会自动联网下载安装包。
+项目未配置代码签名。哈希文件用于核对文件完整性，不证明发布者身份。点击“检查新版”才查询固定的公开 GitHub 发布接口；下载和覆盖安装由用户操作。
 
 ## 检查
 
@@ -88,7 +95,7 @@ npm run dist -- --config.directories.output=C:/nai-release
 npm test
 ```
 
-该命令先完成 TypeScript 检查与 Vite 构建，再运行三组独立 Electron 检查：提示词名称标签、随机种子和个人提示词。检查使用临时用户目录、合成内容及模拟响应，阻断外部网络请求，不调用付费生成接口；报告保存在命令输出的系统临时目录。
+该命令先完成 TypeScript 检查与 Vite 构建，再运行五组独立 Electron 检查：提示词名称标签、随机种子、个人提示词、V5 模式与参数兼容、新版查询及英文名安装包。检查使用临时用户目录、合成内容及模拟响应，阻断外部网络请求，不调用付费生成接口；报告保存在命令输出的系统临时目录。
 
 `scripts/` 中还保留了其他专项检查。其中部分依赖作者的本地词库、旧版本源码备份或安装包，不在默认 `npm test` 范围内。自动检查不等同于真实服务端生成验证。
 
@@ -96,7 +103,7 @@ npm test
 
 Token、识图配置、编辑参数和个人提示词保存于本机 `localStorage`，生成历史保存于 `IndexedDB`；桌面端另在用户数据目录的 `config.json` 中记录词库路径。**这些凭据不是加密保存的**，请保护自己的电脑及应用数据目录，不要把用户资料、导出配置或带凭据的日志提交到仓库。
 
-NovelAI 请求直连代码中配置的官方接口；识图请求发送到用户指定的服务。桌面端与普通浏览器使用各自的存储，默认不会同步收藏、凭据或历史。
+NovelAI 请求直连代码中配置的官方接口；识图请求发送到用户指定的服务。新版查询仅请求本软件固定 GitHub 仓库的公开版本信息，不携带 Token、提示词、图片或本机配置。桌面端与普通浏览器使用各自的存储，默认不会同步收藏、凭据或历史。
 
 ## 项目结构
 

@@ -1,4 +1,4 @@
-import { MAX_CHARACTERS, type CharPrompt } from "../types";
+import { characterLimit, isV5Model, isMediumModel, type CharPrompt } from "../types";
 import PromptEditor from "./PromptEditor";
 
 interface Props {
@@ -69,6 +69,8 @@ function newChar(): CharPrompt {
 }
 
 export default function CharPrompts({ characters, colors, artists, model, disabled, onChange, onOpenLibrary }: Props) {
+  const limit = characterLimit(model), v5 = isV5Model(model), medium = isMediumModel(model);
+  const active = characters.filter(c => c.enabled !== false && c.caption.trim()).length;
   function patch(id: string, p: Partial<CharPrompt>) {
     onChange(characters.map((c) => (c.id === id ? { ...c, ...p } : c)));
   }
@@ -82,14 +84,15 @@ export default function CharPrompts({ characters, colors, artists, model, disabl
         </span>
         <button
           type="button"
-          disabled={disabled || characters.length >= MAX_CHARACTERS}
+          disabled={disabled || characters.length >= limit}
           onClick={() => onChange([...characters, newChar()])}
           className="rounded-md border border-zinc-700 px-2 py-1 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
-          title={characters.length >= MAX_CHARACTERS ? `最多 ${MAX_CHARACTERS} 个角色` : "添加角色"}
+          title={characters.length >= limit ? `最多 ${limit} 个角色输入栏` : "添加角色"}
         >
           ＋ 角色
         </button>
       </div>
+      <p className="feature-note" role="status">本次使用 {active} / {limit} 个角色。{active > limit ? "请停用多出的角色或切到 V5，已有内容会保留。" : "空白和停用角色不参与生成。"}</p>
 
       {characters.length === 0 && (
         <p className="px-3 pb-3 text-xs leading-relaxed text-zinc-600">
@@ -168,9 +171,10 @@ export default function CharPrompts({ characters, colors, artists, model, disabl
             </div>
             {c.positionMode === "custom" && (
               <div className="mt-2 flex items-center gap-3">
-                <NineGrid x={c.x} y={c.y} disabled={disabled} onPick={(x, y) => patch(c.id, { x, y })} />
+                {v5 ? <FreePosition x={c.x} y={c.y} disabled={disabled} index={idx + 1} onPick={(x, y) => patch(c.id, { x, y })} />
+                  : <NineGrid x={c.x} y={c.y} disabled={disabled} onPick={(x, y) => patch(c.id, { x, y })} />}
                 <span className="text-xs text-zinc-500">
-                  站位：{posLabel(c.x, c.y)}
+                  站位：{v5 ? "自由坐标" : posLabel(c.x, c.y)}
                   <br />
                   <span className="text-zinc-600">（x {c.x.toFixed(2)} / y {c.y.toFixed(2)}）</span>
                 </span>
@@ -183,18 +187,46 @@ export default function CharPrompts({ characters, colors, artists, model, disabl
               <PromptEditor colors={colors} artists={artists} model={model}
                 aria-label={`角色 ${idx + 1} 负面词`}
                 value={c.negative}
-                disabled={disabled}
+                disabled={disabled || medium}
                 chips={c.negativeChips}
                 onValueChange={(negative, negativeChips) => patch(c.id, { negative, negativeChips })}
                 rows={2}
                 placeholder="只作用于这个角色的负面词"
                 className="mt-1 w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-violet-500/70 focus:ring-2 focus:ring-violet-500/20 transition-colors"
               />
+              {medium && <p className="feature-note">Medium 不发送角色负面词，原内容仍保留。</p>}
             </details>
           </div>
         ))}
       </div>
-      <details className="character-help"><summary>角色与定位说明</summary><p>名称只作本机备注，不发送给模型。人数词如 2girls 写在主提示词。指定位置会开启整张图的角色定位；同图中 AI 自选的角色使用中心参考点。</p></details>
+      <details className="character-help"><summary>角色与定位说明</summary><p>名称只作本机备注，不发送给模型。人数词如 2girls 写在主提示词。指定位置会开启整张图的角色定位；同图中 AI 自选的角色使用中心参考点。V5 支持 32 个角色输入栏，可点击或拖动定位，也可用方向键微调；这不保证每次都能画准全部角色。切换到旧模型不会删除已有角色。</p></details>
     </div>
   );
+}
+
+function FreePosition({ x, y, disabled, index, onPick }: { x: number; y: number; disabled: boolean; index: number; onPick: (x: number, y: number) => void }) {
+  const clamp = (v: number) => Math.min(1, Math.max(0, Math.round(v * 1000) / 1000));
+  return <button type="button" className="free-position" disabled={disabled} aria-label={`角色 ${index} 自由定位`}
+    aria-describedby={`position-help-${index}`} style={{ aspectRatio: "1" }}
+    onPointerDown={e => {
+      if (e.button !== 0) return;
+      const box = e.currentTarget.getBoundingClientRect();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      onPick(clamp((e.clientX - box.left) / box.width), clamp((e.clientY - box.top) / box.height));
+    }}
+    onPointerMove={e => {
+      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      const box = e.currentTarget.getBoundingClientRect();
+      onPick(clamp((e.clientX - box.left) / box.width), clamp((e.clientY - box.top) / box.height));
+    }}
+    onKeyDown={e => {
+      const step = e.shiftKey ? 0.1 : 0.01;
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home"].includes(e.key)) return;
+      e.preventDefault();
+      onPick(e.key === "Home" ? 0.5 : clamp(x + (e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0)),
+        e.key === "Home" ? 0.5 : clamp(y + (e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0)));
+    }}>
+    <span className="position-dot" style={{ left: `${x * 100}%`, top: `${y * 100}%` }} />
+    <span className="sr-only" id={`position-help-${index}`}>点击或拖动指定位置，方向键微调，Shift 加大步幅，Home 回到中心。当前 x {x.toFixed(3)}，y {y.toFixed(3)}。</span>
+  </button>;
 }

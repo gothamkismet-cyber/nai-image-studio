@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   clampSeed,
-  normalizeParams,
+  normalizeParams, effectiveGenerationParams, characterLimit, isV4Model,
   PARAMS_KEY,
   snapSize,
   type GenParams,
@@ -133,6 +133,11 @@ export default function App() {
   async function handleGenerate() {
     if (abortRef.current) return;
     setError(null);
+    const activeCharacters = params.characters.filter(c => c.enabled !== false && c.caption.trim());
+    if (isV4Model(params.model) && activeCharacters.length > characterLimit(params.model)) {
+      setError(`当前模型最多同时使用 ${characterLimit(params.model)} 个角色，请停用多出的角色或切换到 V5。已有角色内容会保留。`);
+      return;
+    }
     if (!demoMode && !token) {
       setDialogOpen(true);
       setError("还没有填 NovelAI Token：在下面弹窗里填好保存，或者打开顶栏「演示模式」先体验流程。");
@@ -140,12 +145,12 @@ export default function App() {
     }
     // 请求使用本次实际 seed；编辑器中的 null 始终表示「每次随机」。
     const seed = params.seed === null ? Math.floor(Math.random() * 0xffffffff) : clampSeed(params.seed);
-    const p: GenParams = {
+    const p = effectiveGenerationParams({
       ...params,
       seed,
       width: snapSize(params.width),
       height: snapSize(params.height),
-    };
+    });
     setParams((prev) => ({ ...prev, seed: prev.seed === null ? null : clampSeed(prev.seed), width: p.width, height: p.height }));
     const ac = new AbortController();
     abortRef.current = ac;
